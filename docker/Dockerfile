@@ -12,7 +12,6 @@ WORKDIR /home/ros/src
 
 RUN git clone https://github.com/arshadlab/PicknPlace.git
 RUN git clone https://github.com/arshadlab/robot_config.git
-RUN git clone https://github.com/arshadlab/gazebo_plugins.git
 RUN git clone https://github.com/arshadlab/pymoveit2.git
 RUN git clone https://github.com/ros/executive_smach.git -b ros2
 

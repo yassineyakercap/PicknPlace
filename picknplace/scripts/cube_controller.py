@@ -53,8 +53,6 @@ import random
 from copy import copy, deepcopy
 
 DEFAULT_TIMEOUT = 30.0
-
-
 class CubeController(Node):
     # Node to spawn an entity in Gazebo.
     def __init__(self, args):
@@ -186,26 +184,6 @@ class CubeController(Node):
                 'cube_name', Parameter.Type.STRING, cubelist))
 
         self.timer.reset()
-
-    
-    
-    def timer_callback_orig_xxxxxxxx(self):
-        start = time.time()
-
-        for cube in self.cubes:
-            pose = self._cube_location(cube)    
-            if pose.position.x > 0.25 and pose.position.x < 1.5:
-                if (pose.position.y > -3.5 and pose.position.y < -1.5):
-                    self.object_location_publisher1.publish(pose)
-                elif (pose.position.y > -1.0 and pose.position.y < 1.0):
-                    self.object_location_publisher0.publish(pose)
-              
-            else:
-                self.get_logger().info(f"Deleting cube {cube}")
-                self.cubes.remove(cube)
-                # self.get_logger().info(f' {self._cube_location(cube)}')
-
-        # self.get_logger().info(f"xxxxx {(time.time() - start) * 1000} ms")
 
     def is_cube_missed(self, pose):
         if pose.x > 0.0 and pose.x < 1.5 and pose.y > 1.7 and pose.y < 3.0:

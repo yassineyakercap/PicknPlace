@@ -19,7 +19,7 @@ file(GLOB SCRIPT_FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/*.py")
 install(PROGRAMS ${SCRIPT_FILES} DESTINATION lib/${PROJECT_NAME})
 
 
-install(DIRECTORY launch urdf worlds maps DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch urdf worlds maps rviz DESTINATION share/${PROJECT_NAME})
 
 ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/env-hooks/picknplace.dsv.in")
 

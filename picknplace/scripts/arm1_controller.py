@@ -22,7 +22,7 @@ from pymoveit2 import MoveIt2
 from smach import State, StateMachine
 from smach_ros import RosState
 
-from robot_config.utils import *
+from robot_config import utils
 from robot_interface.msg import BoxState
 from pymoveit2.robots import ur5 as robot 
 from picknplace.basic_navigator import BasicNavigator
@@ -31,6 +31,7 @@ class RobotController(Node):
         # Node to spawn an entity in Gazebo.
         def __init__(self, args):
                 super().__init__('ARM1Controller')
+
                 qos_profile = QoSProfile(
                     reliability=QoSReliabilityPolicy.RELIABLE,
                     history=QoSHistoryPolicy.KEEP_LAST,
@@ -67,12 +68,9 @@ class RobotController(Node):
 
                 self.logger = self.get_logger()
                 self.logger.set_level(LoggingSeverity.INFO)
-                # self.moveit2_robot0.set_path_constraint(position=[3.,3.,3.])
-                self.grasping = False
-                # self.transform_to_world = self.tf_buffer.lookup_transform(
-                #                'base_link','world', rclpy.time.Time())
 
-                #outcome = sm.execute()
+                self.grasping = False
+
                 self.execute_state_machine=False
                 self.robot_subscription0 = self.create_subscription(
                     BoxState, '/object_location0', self.object_location0_cb, callback_group=self.callback_group0, qos_profile=qos_profile)
@@ -91,9 +89,6 @@ class RobotController(Node):
                     self.gripper_service_.wait_for_service()
                     self.get_logger().info("...connected!")
 
-                #self.timer = self.create_timer(.1, self.state_machine_callback,
-                #              callback_group=self.timer_cb_group)
-
         def state_machine_callback(self):
                 self.timer.cancel()
                 if self.execute_state_machine==True:
@@ -106,14 +101,7 @@ class RobotController(Node):
                 self.timer.reset()
 
         def object_location0_cb(self, pose):
-            #self.get_logger().info(f"cube location {pose.position.x - 0.20}, {pose.position.y}")
             self.last_pose = deepcopy(pose)
-            '''
-            if  self.execute_state_machine==False: # and pose.position.x != 0 and pose.position.y < -0.1 and pose.position.x > .5 and pose.position.x < 1.5:
-                self.last_pose = deepcopy(pose)
-                self.logger.info(f"*** Move action status")
-                self.execute_state_machine=True
-            '''
             pass
 
         def object_location1_cb(self, pose):
@@ -195,12 +183,6 @@ class ApproachObject(RosState):
         self.robot_controller.moveit2_robot0.move_to_pose(position=target_pos, quat_xyzw=quat_xyzw, cartesian=True)
         self.robot_controller.moveit2_robot0.wait_until_executed()
         return 'approached'
-        #self.robot_controller.logger.info(f"Execution completed with status ={self.robot_controller.moveit2_robot0.move_action_status}")
-        #if self.robot_controller.moveit2_robot0.move_action_status == GoalStatus.STATUS_SUCCEEDED:
-        #     return 'approached'
-        #else:
-        #     return 'failed'
-    
 
 class GraspObject(RosState):
     def __init__(self, robot_controller):
@@ -214,18 +196,6 @@ class GraspObject(RosState):
         while self.robot_controller.grasping == False and pose.name == self.robot_controller.last_pose.name:
              time.sleep(.1)
 
-        
-        '''
-        while self.robot_controller.last_pose.pose.position.y < 0:
-                self.robot_controller.logger.info(f"After grasp {self.robot_controller.last_pose.pose.position.y }")
-                if self.robot_controller.grasping==True:
-                  self.robot_controller.logger.info(f"Grasp successful")
-                  return 'grasped'
-                time.sleep(.1)
-     
-        # If unsuccessful:
-        self.robot_controller.gripper_off()
-        '''
         return 'grasped'
 
 class PlaceObject(RosState):
@@ -235,9 +205,7 @@ class PlaceObject(RosState):
 
     def execute(self, userdata):
         # Code to place the object
-        # This might use another MoveIt2 action, for example
-        # If successful:
-        pos1 = entity_location(self.robot_controller, "amr1", "arm1")
+        pos1 = utils.entity_location(self.robot_controller, "amr1", "arm1")
         self.turtlebot_pos = [pos1.position.x, pos1.position.y, 0.20]
         self.robot_controller.moveit2_robot0.move_to_pose(position=[self.robot_controller.last_pose.pose.position.x - .18, -0.3, 0.35], quat_xyzw=[
                                                  1.0, 0.0, 0.0, 0.0], cartesian=True)
@@ -250,8 +218,7 @@ class PlaceObject(RosState):
         self.robot_controller.moveit2_robot0.wait_until_executed()
         self.robot_controller.gripper_off()
         return 'placed'
-        # If unsuccessful:
-        return 'failed'
+
 
 class TransferObject(RosState):
     def __init__(self, robot_controller):
@@ -262,7 +229,7 @@ class TransferObject(RosState):
         # Code to place the object
         # This might use another MoveIt2 action, for example
         # If successful:
-        self.robot_controller.amr_goto_pose(-3.0, 0.0, .004)
+        self.robot_controller.amr_goto_pose(-3.0, -3.5, .004)
         return 'transferred'
      
     
