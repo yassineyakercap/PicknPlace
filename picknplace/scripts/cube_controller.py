@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2019 Open Source Robotics Foundation
+# Copyright 2023 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,43 +14,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Desc: helper script for spawning entities in gazebo
-# Author: John Hsu, Dave Coleman
+# Desc: Spawn cubes on conveyorbelt and publish their coordinates to a topic
+# Author: Arshad Mehmood
 #
+# Standard Library Imports
 import argparse
 import math
 import os
 import sys
+import time
+import random
+from copy import copy, deepcopy
 from urllib.parse import SplitResult, urlsplit
 from xml.etree import ElementTree
 
-from gazebo_msgs.msg import ModelStates
-from gazebo_msgs.srv import SetModelConfiguration
-from gazebo_msgs.srv import SpawnEntity, DeleteEntity, GetEntityState
-from robot_interface.msg import BoxState
-from rosgraph_msgs.msg import Clock
-from geometry_msgs.msg import Pose
+# Third-Party Library Imports
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSDurabilityPolicy
-from rclpy.qos import QoSProfile
-from std_msgs.msg import String
-from std_srvs.srv import Empty
+from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+from rcl_interfaces.msg import ParameterValue, ParameterType
+from rcl_interfaces.srv import SetParameters
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from ament_index_python.packages import get_package_share_directory
 from rclpy.parameter import Parameter
-from rcl_interfaces.msg import ParameterValue
-from rcl_interfaces.msg import ParameterType
-from rcl_interfaces.srv import SetParameters
-import robot_config.utils as utils
 
-import time
-import random
-from copy import copy, deepcopy
+# ROS 2 Imports
+from gazebo_msgs.msg import ModelStates
+from gazebo_msgs.srv import SetModelConfiguration, SpawnEntity, DeleteEntity, GetEntityState
+from robot_interface.msg import BoxState
+from rosgraph_msgs.msg import Clock
+from geometry_msgs.msg import Pose, Point, Quaternion
+from std_msgs.msg import String
+from std_srvs.srv import Empty
+
+# Custom Module Imports
+import robot_config.utils as utils
 
 DEFAULT_TIMEOUT = 30.0
 class CubeController(Node):
@@ -60,35 +61,30 @@ class CubeController(Node):
         self.last_spawn = 0
 
     def run(self):
-        """
-        Run node, spawning entity and doing other actions as configured in program arguments.
+        self.entity_xml = open(get_package_share_directory('picknplace') + '/urdf/marker_0/model.sdf').read()
+     
+        self._init_pose()
+        self._init_ros_resources()
+     
+        self.index = 0
+        self.cubes = [None] * 5
+        self.arm1_range = [0.25, -1.7, 1.5, -.2]
+        self.delete_range = [0.25, .1, 1.5, 2.0]
+     
+        return 0
 
-        Returns exit code, 1 for failure, 0 for success
-        """
-        # Wait for entity to exist if wait flag is enabled
-        picknplace = get_package_share_directory('picknplace')
-        # f = open(robot_config + '/urdf/objects/box.urdf', 'r')
-        f = open(picknplace + '/urdf/marker_0/model.sdf')
-        self.entity_xml = f.read()
-        # Form requested Pose from arguments
-        self.initial_pose = Pose()
-        self.initial_pose.position.x = float(0.6)
-        self.initial_pose.position.y = float(-3.0)  # float(-3.7)
-        self.initial_pose.position.z = float(0.5)
-        q = utils.quaternion_from_euler(0.0, 0.0, 0.0)
-        self.initial_pose.orientation.w = q[0]
-        self.initial_pose.orientation.x = q[1]
-        self.initial_pose.orientation.y = q[2]
-        self.initial_pose.orientation.z = q[3]
+    def _init_pose(self):
+        self.initial_pose = Pose(position=Point(x=0.6, y=-3.0, z=0.5))
+        q = utils.quaternion_from_euler(0, 0, 0)
+        self.initial_pose.orientation = Quaternion(w=q[0], x=q[1], y=q[2], z=q[3])
+
+    def _init_ros_resources(self):
+        qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, history=QoSHistoryPolicy.KEEP_LAST, depth=1)
+        location_qos_profile = QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, history=QoSHistoryPolicy.KEEP_LAST, depth=1)
+
         self.callback_group = ReentrantCallbackGroup()
         self.client_cb_group = MutuallyExclusiveCallbackGroup()
         self.timer_cb_group = MutuallyExclusiveCallbackGroup()
-        self.index = 0
-        self.cubes = [None for i in range(5)]
-        self.arm1_range = [0.25, -3.5, 1.5, -1.7]
-        self.arm2_range = [0.25, -1.7, 1.5, -.2]
-        self.delete_range = [0.25, .1, 1.5, 2.0]
-        self.turtlebot_range = [-0.4, -0.4, 0.0, -.1]
 
         self.spawn_client = self.create_client(
             SpawnEntity, '/spawn_entity', callback_group=self.client_cb_group)
@@ -108,38 +104,10 @@ class CubeController(Node):
             self.get_logger().error(
                 'Service %s/get_entity_state unavailable. Was Gazebo started with GazeboRosFactory?')
 
+        self.object_location_publisher = self.create_publisher(BoxState, '/object_location', qos_profile=location_qos_profile, callback_group=self.client_cb_group)
+        self.subscription = self.create_subscription(Clock, '/clock', self.clock_cb, callback_group=self.callback_group, qos_profile=qos_profile)
+        self.timer = self.create_timer(1, self.timer_callback, callback_group=self.timer_cb_group)
 
-        location_qos_profile = QoSProfile(
-            reliability=QoSReliabilityPolicy.RELIABLE,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1
-        )
-
-        self.object_location_publisher0 = self.create_publisher(BoxState, '/object_location0', qos_profile=location_qos_profile, callback_group=self.client_cb_group)
-        
-        self.object_location_publisher1 = self.create_publisher(
-            BoxState, '/object_location1', qos_profile=location_qos_profile, callback_group=self.client_cb_group)
-        
-        self.trigger_turtlebot_nav = self.create_publisher(
-            String, '/trigger_move', qos_profile=location_qos_profile, callback_group=self.client_cb_group)
-
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-
-
-        qos_profile = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1
-        )
-
-        self.subscription = self.create_subscription(
-            Clock, '/clock', self.clock_cb, callback_group=self.callback_group, qos_profile=qos_profile)
-
-        self.timer = self.create_timer(
-            1, self.timer_callback, callback_group=self.timer_cb_group)
-
-        return 0
 
     def timer_callback(self):
         self.timer.cancel()
@@ -155,34 +123,15 @@ class CubeController(Node):
                         self._delete_cube(index)
                         array_len-=1
                     elif utils.pointInRect(pose, self.arm1_range):
-                        self.object_location_publisher1.publish(pose)
-                    elif utils.pointInRect(pose, self.arm2_range):
                         box_state = BoxState()
                         box_state.name =cube
                         box_state.pose=pose
-                        self.object_location_publisher0.publish(box_state)
-                        # elif pointInRect(pose, self.turtlebot_range) and pose.position.z < 0.21 and pose.position.z > 0.18:
+                        self.object_location_publisher.publish(box_state)
                     else:
-                        pass
-                        #pos = utils.entity_location(self, "turtlebot3", cube)
-                        #if pos.position.x < .2 and pos.position.x > -.2 and pos.position.y < .2 and pos.position.y > -.2 and pose.position.z < 0.21 and pose.position.z > 0.18:
-                        #    cubelist += str(index) + ','
-                            # msg = String()
-                            # msg.data = deepcopy(cube)
-                            # self.get_logger().info(f"**** object on turtlebot .. triggering move")
-                            # self.trigger_turtlebot_nav.publish(msg)
-                            # call_set_parameters(self, "Turtlebot3Controller", Parameter('goto_arm', Parameter.Type.INTEGER, 1))
-                            # call_set_parameters(self, "Turtlebot3Controller", Parameter('cube_name', Parameter.Type.STRING, cube))
-                        #    pass
+                        pass                        
         except Exception as e:
             pass
-    
-        if cubelist != '':
-            utils.call_set_parameters(self, "Turtlebot3Controller", Parameter(
-                'goto_arm', Parameter.Type.INTEGER, 1))
-            utils.call_set_parameters(self, "Turtlebot3Controller", Parameter(
-                'cube_name', Parameter.Type.STRING, cubelist))
-
+ 
         self.timer.reset()
 
     def is_cube_missed(self, pose):
@@ -191,10 +140,8 @@ class CubeController(Node):
         else:
             return False
 
-    def clock_cb(self, entity):
-        
-        if entity.clock.sec - self.last_spawn > 10 or self.last_spawn == 0:
-            
+    def clock_cb(self, entity):        
+        if entity.clock.sec - self.last_spawn > 10 or self.last_spawn == 0:            
             self.last_spawn = entity.clock.sec
             array_len = len(self.cubes)
             for index in range(array_len):
@@ -236,7 +183,6 @@ class CubeController(Node):
             self.cubes.remove(cube_name)
         return srv_call.state.pose
 
-    # TODO(shivesh): Wait for https://github.com/ros2/rclpy/issues/244
     def _delete_cube(self, index):
         # Delete entity from gazebo on shutdown if bond flag enabled
         if self.delete_client is None:
@@ -263,8 +209,8 @@ def main(args=sys.argv):
     exit_code = cube_controller_node.run()
     executor.spin()
 
+    rclpy.shutdown()
     sys.exit(0)
-
 
 if __name__ == '__main__':
     try:
