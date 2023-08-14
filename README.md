@@ -136,7 +136,17 @@ Use the following command to set a new goal for the AMR:
 ros2 action send_goal  /amr1/navigate_to_pose nav2_msgs/action/NavigateToPose "pose: {header: {frame_id: map}, pose: {position: {x: -3.2, y: -0.50, z: 0.0}, orientation:{x: 0.0, y: 0.0, z: 0, w: 1.0000000}}}"
 ```
 
-## Conclusion
+# Performance
+The RTF for this simulation on the TGL i7 NUC is approximately 0.93, which is close to real-time speed. A more advanced machine would easily achieve an RTF of 1.0.  In Gazebo simulation, the Real-Time Factor (RTF) indicates the speed of the simulation relative to real-world time. An RTF of 1.0 means the simulation runs at real-time speed, while values less than 1.0 indicate a slower simulation, and values greater than 1.0 indicate a faster simulation. The goal in many robotic simulations is to achieve an RTF close to 1.0, ensuring realistic behavior, but the actual RTF can vary based on computational resources and simulation complexity.
+
+The simulation is set with a step size of 1 ms, implying that each millisecond of simulation time corresponds to a real-time millisecond. As observed from the snapshot of the trace below, a single Gazebo update takes approximately 1 ms, leading to an accumulated RTF of about 0.93.
+
+
+![image](https://github.com/arshadlab/PicknPlace/assets/85929438/356dc839-7450-4370-af36-c2e95758878f)
+
+Time chart generated using [repo](https://github.com/arshadlab/time_charting_with_perf)
+
+# Conclusion
 
 This simulation has been tested on Gazebo Classic with ROS2 Humble. This project provides an example of a simple multi-robot system and can serve as a resource for anyone interested in robotic simulations.
 
