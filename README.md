@@ -1,6 +1,7 @@
 # Gazebo Pick & Place Demo
 This repository contains a Pick-n-Place simulation implemented using ROS2 Humble and Gazebo Classic. The project showcases the interaction of a conveyor belt, a TurtleBot3 Autonomous Mobile Robot (AMR), and two UR5 robotic arms in a simulated environment.  The aim is to harnesses the capabilities of both the Nav2 and MoveIt2 stacks, presenting a comprehensive demonstration of multi-robot coordination in a virtual environment.
 
+This implementation has room for further enhancements, but it can serve as an excellent starting point for anyone looking to understand the integration of Nav2 and Moveit2 stacks in multi robot scenario.
 
 https://github.com/arshadlab/PicknPlace/assets/85929438/1f74f3ae-6e81-4e10-b44e-0b9b33a77aa3
 
