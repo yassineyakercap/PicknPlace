@@ -72,7 +72,7 @@ rosdep install -r --from-paths . --ignore-src --rosdistro $ROS_DISTRO -y
 
 ```
 cd robot_ws
-source /opt/ros/humble/setup.bash
+source ~/robot_ws/install/local_setup.bash
 colcon build --symlink-install
 ```
 
